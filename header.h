@@ -23,12 +23,13 @@ typedef struct
 	unsigned int nSeqNum;						  //序列号
 	unsigned int nAcknowledgeNum;				  //确认号
 	unsigned char bDataOfSet;					  //高4位代表数据偏移
-	unsigned char bflags;					      //低6位代表URG,ACK,PSH,RST,SYNhe,FIN
+	unsigned char bflags;					      //低6位代表URG,ACK,PSH,RST,SYN,FIN
 	unsigned short nWindowSize;					  //窗口大小
 	unsigned short nCheckSum;					  //校验和
 	unsigned short nrgentPointer;			      //紧急数据偏移量
 }tcpHeader,*ptr_tcpHeader;
 
+//UDP报头
 typedef struct
 {
 	unsigned short nSourPort;				 	  //源端口号
@@ -37,16 +38,18 @@ typedef struct
 	unsigned short nCheckSum;					  //校验和
 }udpHeader, *ptr_udpHeader;
 
+//ICMP报头
 typedef struct
 {
-	unsigned char   icmp_type;		// 消息类型
-	unsigned char   icmp_code;		// 代码
-	unsigned short  icmp_checksum;	// 校验和
-	unsigned short  icmp_id;		// 用来惟一标识此请求的ID号，通常设置为进程ID
-	unsigned short  icmp_sequence;	// 序列号
-	unsigned long   icmp_timestamp; // 时间戳
+	unsigned char   bIcmpType;			   		 // 消息类型
+	unsigned char   bIcmpCode;					 // 代码
+	unsigned short  nIcmpChecksum;	             // 校验和
+	unsigned short  nIcmpId;		             // 用来惟一标识此请求的ID号，通常设置为进程ID
+	unsigned short  nIcmpSequence;	             // 序列号
+	unsigned long   nIcmpTime;              // 时间戳
 } IcmpHeader;
 
+//包信息头
 typedef struct
 {	
 	unsigned short nLength;						  //数据包长度

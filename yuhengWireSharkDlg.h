@@ -50,8 +50,9 @@ public:
 	CEdit pingAndTraceRoute;
 	// 发送的ping包数量
 	CEdit pingPackNum;
-	afx_msg void OnEnChangeEdit3();
 	CComboBox hostIpSelect;
 	CComboBox packNumSelect;
+	afx_msg void OnBnClickedButton6();
 	afx_msg void OnBnClickedButton3();
+	afx_msg void OnLbnSelchangeList2();
 };

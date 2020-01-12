@@ -83,8 +83,9 @@ BEGIN_MESSAGE_MAP(CyuhengWireSharkDlg, CDialogEx)
 	ON_LBN_SELCHANGE(IDC_LIST1, &CyuhengWireSharkDlg::OnLbnSelchangeList1)
 	ON_BN_CLICKED(IDC_BUTTON5, &CyuhengWireSharkDlg::OnBnClickedButton5)
 	ON_BN_CLICKED(IDC_BUTTON4, &CyuhengWireSharkDlg::OnBnClickedButton4)
-	ON_EN_CHANGE(IDC_EDIT3, &CyuhengWireSharkDlg::OnEnChangeEdit3)
+	ON_BN_CLICKED(IDC_BUTTON6, &CyuhengWireSharkDlg::OnBnClickedButton6)
 	ON_BN_CLICKED(IDC_BUTTON3, &CyuhengWireSharkDlg::OnBnClickedButton3)
+	ON_LBN_SELCHANGE(IDC_LIST2, &CyuhengWireSharkDlg::OnLbnSelchangeList2)
 END_MESSAGE_MAP()
 
 
@@ -216,6 +217,7 @@ HCURSOR CyuhengWireSharkDlg::OnQueryDragIcon()
 
 void CyuhengWireSharkDlg::OnBnClickedButton1()
 {
+	mainDisplay.AddString("**************************抓包开始**************************\n");
 	packrows = 0;//归位
 	memset(packs, 0, sizeof(packs));
 	//创建原始套接字
@@ -235,6 +237,7 @@ void CyuhengWireSharkDlg::OnBnClickedButton1()
 
 	int ipSelect = hostIpSelect.GetCurSel();
 	hostIpSelect.GetLBText(ipSelect, bindAddr); //从下拉框中获取信息
+
 
 	SOCKADDR_IN addr_in;
 	addr_in.sin_family = AF_INET;
@@ -291,13 +294,14 @@ void CyuhengWireSharkDlg::OnBnClickedButton1()
 		}
 	}
 	infoDisplay.AddString("抓取完毕");
-	for (int j=0;j<packNum;j++)
+	for (int j = 0; j < packNum; j++)
 	{
 		CString num;
-		num.Format("第%d个IP数据包", j + 1);
+		num.Format("第%d个IP数据包\n", j + 1);
 		mainDisplay.AddString(num);
 		DecodeIPpacket(packs[j]);
-	}	
+	}
+	mainDisplay.AddString("**************************抓包结束**************************\n");
 }
 void CyuhengWireSharkDlg::DecodeIPpacket(char *pData)
 {
@@ -309,29 +313,52 @@ void CyuhengWireSharkDlg::DecodeIPpacket(char *pData)
 	dest.S_un.S_addr = pIPHdr->nDestIp;
 	strcpy(SourceIp, inet_ntoa(source));
 	strcpy(DestIp, inet_ntoa(dest));
-	mainDisplay.AddString(CString("源地址:")+SourceIp+CString("    ===发往==>>   ")+ CString("目的地址:")+DestIp);//地址
-	
-	int HeaderLength = (pIPHdr->bVerAndHLen & 0xf0) * sizeof(unsigned int);//头部长度
+	mainDisplay.AddString(CString("源地址:")+SourceIp+CString("  ===发往==>>  ")+ CString("目的地址:")+DestIp+CString("\n"));//地址
+	CString IpLength;
+	IpLength.Format("IP报文长度:%d      ", ntohs(pIPHdr->nIpLength));
+	CString check;
+	check.Format("   校验和:%d\n", ntohs(pIPHdr->nCheckSum));
+	mainDisplay.AddString(IpLength+check);
+	int HeaderLength = (pIPHdr->bVerAndHLen & 0xf) * sizeof(ULONG), sourceport, destionport;//头部长度
 	switch (pIPHdr->bProtocol)
 	{
 	case IPPROTO_TCP:
-		mainDisplay.AddString("这是一个TCP报文");
+		mainDisplay.AddString("上层协议类型:TCP\n");
 		DecodeTcpPacket(pData+ HeaderLength);
 		break;
 	case IPPROTO_UDP:
-		mainDisplay.AddString("这是一个UDP报文");
+		mainDisplay.AddString("上层协议类型:UDP\n");
 		DecodeUdpPacket(pData + HeaderLength);
 		break;
 	case IPPROTO_ICMP:
-		mainDisplay.AddString("这是一个ICMP报文");
+		mainDisplay.AddString("上层协议类型:ICMP\n");
 		DecodeIcmpPacket(pData + HeaderLength);
 		break;
 	default:
 		CString out;
-		out.Format("其它报文：协议号%d", pIPHdr->bProtocol);
+		out.Format("其它报文：协议号%d\n", pIPHdr->bProtocol);
 		mainDisplay.AddString(out);
 	}
-	mainDisplay.AddString("*****************************************************************************");
+
+	CString strData;
+	strData = strData + "0000:";
+	for (int i = 0; i < ntohs(pIPHdr->nIpLength); i++)
+	{
+		CString sff;
+		sff.Format("%02x ", unsigned char(*(pData+i)));
+		strData = strData + sff;
+		if ((i + 1) % 16 == 0)
+		{
+			mainDisplay.AddString(strData);
+			strData = "";
+			sff.Format("\n%04x:", i + 1);
+			strData = strData + sff;
+		}
+	}
+	mainDisplay.AddString(strData);
+
+
+	mainDisplay.AddString("\n******************************************************************\n");
 
 }
 
@@ -339,43 +366,62 @@ void CyuhengWireSharkDlg::DecodeTcpPacket(char * pData)
 {
 	tcpHeader *pTcpHdr = (tcpHeader*)pData;
 	CString out;
-	out.Format("TCP源端口:%d  ==>>  目的端口:%d", ntohs(pTcpHdr->nSourPort), ntohs(pTcpHdr->nDestPort));
+	out.Format("TCP源端口:%d    ==>>    目的端口:%d\n", ntohs(pTcpHdr->nSourPort), ntohs(pTcpHdr->nDestPort));
 	mainDisplay.AddString(out);
+	if (ntohs(pTcpHdr->nSourPort)==80||ntohs(pTcpHdr->nDestPort)==80|| ntohs(pTcpHdr->nSourPort) == 8080 || ntohs(pTcpHdr->nDestPort) == 8080 )
+	{
+		mainDisplay.AddString("应用层:WEB服务--HTTP\n");
+	}if (ntohs(pTcpHdr->nSourPort) == 443 || ntohs(pTcpHdr->nDestPort) == 443)
+	{
+		mainDisplay.AddString("应用层:WEB服务--HTTPS\n");
+	}else if (ntohs(pTcpHdr->nSourPort) == 20 || ntohs(pTcpHdr->nDestPort) == 20 || ntohs(pTcpHdr->nSourPort) == 21 || ntohs(pTcpHdr->nDestPort) == 21)
+	{
+		mainDisplay.AddString("应用层:FTP服务\n");
+	}else if (ntohs(pTcpHdr->nSourPort) == 8000 || ntohs(pTcpHdr->nDestPort) ==8000 || ntohs(pTcpHdr->nSourPort) == 4000||  ntohs(pTcpHdr->nDestPort) == 4000)
+	{
+		mainDisplay.AddString("应用层:腾讯QQ服务\n");
+	}
+	
 }
 
 void CyuhengWireSharkDlg::DecodeUdpPacket(char *pData)
 {
 	udpHeader *pUdpHdr = (udpHeader*)pData;
 	CString out;
-	out.Format("UDP源端口:%d  ==>>  目的端口:%d", ntohs(pUdpHdr->nSourPort), ntohs(pUdpHdr->nDestPort));
+	out.Format("UDP源端口:%d  ==>>  目的端口:%d\n", ntohs(pUdpHdr->nSourPort), ntohs(pUdpHdr->nDestPort));
 	mainDisplay.AddString(out);
+	if (ntohs(pUdpHdr->nSourPort) == 53 || ntohs(pUdpHdr->nDestPort) == 53)
+	{
+		mainDisplay.AddString("应用层:DNS服务\n");
+	}
 
 }
 void CyuhengWireSharkDlg::DecodeIcmpPacket(char *pData)
 {
 	IcmpHeader *pICMPHdr = (IcmpHeader*)pData;
-	if (pICMPHdr->icmp_type == 3)
+	if (pICMPHdr->bIcmpType == 3)
 	{
-		switch (pICMPHdr->icmp_code)
+		switch (pICMPHdr->bIcmpCode)
 		{
 		case 0:
-			mainDisplay.AddString("内容:目的网络不可达!"); break;
+			mainDisplay.AddString("ICMP内容:目的网络不可达!\n"); break;
 		case 1:
-			mainDisplay.AddString("内容:目的主机不可达!"); break;
+			mainDisplay.AddString("ICMP内容:目的主机不可达!\n"); break;
 		case 6:
-			mainDisplay.AddString("内容:不知道的目的网络!"); break;
+			mainDisplay.AddString("ICMP内容:不知道的目的网络!\n"); break;
 		case 7:
-			mainDisplay.AddString("内容:不知道的目的主机!"); break;
+			mainDisplay.AddString("ICMP内容:不知道的目的主机!\n"); break;
 		default:
-			infoDisplay.AddString("内容:探测时出现未知错误!"); break;
+			infoDisplay.AddString("ICMP内容:探测时出现未知错误!\n"); break;
 		}
 	}
 
 }
 
-void CyuhengWireSharkDlg::OnBnClickedButton2()
+void CyuhengWireSharkDlg::OnBnClickedButton2()//清空
 {
-	// TODO: 在此添加控件通知处理程序代码
+	mainDisplay.ResetContent();
+	infoDisplay.ResetContent();
 }
 
 
@@ -403,9 +449,8 @@ unsigned short Checksum(unsigned short* pBuf, int iSize) //icmp校验和计算�
 }
 void CyuhengWireSharkDlg::OnBnClickedButton5()//路由追踪
 {
-
-	infoDisplay.AddString("请输入目的IP地址或者IP");
-	infoDisplay.AddString("正在对最多三十个跃点进行追踪,请耐心等待");
+	mainDisplay.AddString("*************************TraceRoute*************************\n");
+	infoDisplay.AddString("正在对最多三十个跃点进行追踪,请耐心等待\n");
 	CString szDestIp;
 	pingAndTraceRoute.GetWindowTextA(szDestIp);
 	unsigned long ulDestIP = inet_addr(szDestIp);
@@ -442,9 +487,9 @@ void CyuhengWireSharkDlg::OnBnClickedButton5()//路由追踪
 	memset(IcmpRecvBuf, 0, sizeof(IcmpRecvBuf));
 	//填充包 
 	IcmpHeader* pIcmpHeader = (IcmpHeader*)IcmpSendBuf;
-	pIcmpHeader->icmp_type = 8;
-	pIcmpHeader->icmp_id = 0;
-	pIcmpHeader->icmp_id = (unsigned short)GetCurrentProcessId();
+	pIcmpHeader->bIcmpType = 8;
+	pIcmpHeader->nIcmpId = 0;
+	pIcmpHeader->nIcmpId = (unsigned short)GetCurrentProcessId();
 	memset(IcmpSendBuf + sizeof(IcmpHeader), '\0', DEF_ICMP_DATA_SIZE);  //填充
 	//填充目的地址
 	sockaddr_in destAddr;
@@ -465,9 +510,9 @@ void CyuhengWireSharkDlg::OnBnClickedButton5()//路由追踪
 		nTick = GetTickCount();
 		bool timeout = false;
 		/*** 填写ICMP报文的序列号并计算校验和***/
-		((IcmpHeader*)IcmpSendBuf)->icmp_checksum = 0;
-		((IcmpHeader*)IcmpSendBuf)->icmp_sequence = htons(iSeqNo++);
-		((IcmpHeader*)IcmpSendBuf)->icmp_checksum = Checksum((unsigned short*)IcmpSendBuf, sizeof(IcmpHeader) + DEF_ICMP_DATA_SIZE);
+		((IcmpHeader*)IcmpSendBuf)->nIcmpChecksum = 0;
+		((IcmpHeader*)IcmpSendBuf)->nIcmpSequence = htons(iSeqNo++);
+		((IcmpHeader*)IcmpSendBuf)->nIcmpChecksum = Checksum((unsigned short*)IcmpSendBuf, sizeof(IcmpHeader) + DEF_ICMP_DATA_SIZE);
 		nRet = sendto(rawSocket, IcmpSendBuf, sizeof(IcmpSendBuf), 0,(sockaddr*)&destAddr, sizeof(destAddr));
 		if (nRet == SOCKET_ERROR)
 		{
@@ -495,7 +540,7 @@ void CyuhengWireSharkDlg::OnBnClickedButton5()//路由追踪
 			}
 			pICMPHdr = (IcmpHeader*)&IcmpRecvBuf[20];
 			szIP = inet_ntoa(recvAddr.sin_addr);
-			if (pICMPHdr->icmp_type == 11 || pICMPHdr->icmp_type == 0 || pICMPHdr->icmp_type == 3) break;
+			if (pICMPHdr->bIcmpType == 11 || pICMPHdr->bIcmpType == 0 || pICMPHdr->bIcmpType == 3) break;
 		} while (n < 10);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
 		if (n > 10)continue;
 		CString info;
@@ -512,20 +557,20 @@ void CyuhengWireSharkDlg::OnBnClickedButton5()//路由追踪
 			mainDisplay.AddString(info);
 		}
 		
-		if (pICMPHdr->icmp_type == 3)
+		if (pICMPHdr->bIcmpType == 3)
 		{
-			switch (pICMPHdr->icmp_code)
+			switch (pICMPHdr->bIcmpCode)
 			{
 			case 0: 
-				mainDisplay.AddString("目的网络不可达!");break;
+				mainDisplay.AddString("目的网络不可达!\n");break;
 			case 1:
-				mainDisplay.AddString("目的主机不可达!"); break;
+				mainDisplay.AddString("目的主机不可达!\n"); break;
 			case 6: 
-				mainDisplay.AddString("不知道的目的网络!"); break;
+				mainDisplay.AddString("不知道的目的网络!\n"); break;
 			case 7: 
-				mainDisplay.AddString("不知道的目的主机!"); break;
+				mainDisplay.AddString("不知道的目的主机!\n"); break;
 			default:
-				infoDisplay.AddString("探测时出现未知错误!"); break;
+				infoDisplay.AddString("探测时出现未知错误!\n"); break;
 			}
 		}
 		if (destAddr.sin_addr.S_un.S_addr == recvAddr.sin_addr.S_un.S_addr)
@@ -534,6 +579,7 @@ void CyuhengWireSharkDlg::OnBnClickedButton5()//路由追踪
 		}
 	} while (nTTL++ < 30);
 	closesocket(rawSocket);
+	mainDisplay.AddString("***********************TraceRoute结束***********************\n");
 }
 
 void CyuhengWireSharkDlg::OnBnClickedButton4()//ping
@@ -544,11 +590,10 @@ void CyuhengWireSharkDlg::OnBnClickedButton4()//ping
 	pingPackNum.GetWindowTextA(temp);
 	if (temp!="")
 		pingNum = atoi(temp);
-	mainDisplay.AddString("**************************ping开始**************************");
+	mainDisplay.AddString("**************************ping开始**************************\n");
 	infoDisplay.AddString("ping开始");
 	CString szDestIp;
 	pingAndTraceRoute.GetWindowTextA(szDestIp);
-	/***将点分十进制IP地址转换为32位二进制表示的IP地址***/
 	unsigned long ulDestIP = inet_addr(szDestIp);
 	/****转换不成功时按域名解析****/
 	if (ulDestIP == INADDR_NONE)
@@ -556,7 +601,7 @@ void CyuhengWireSharkDlg::OnBnClickedButton4()//ping
 		hostent* pHostent = gethostbyname(szDestIp);
 		if (pHostent != NULL)
 			ulDestIP = (*(in_addr*)pHostent->h_addr).s_addr;
-		else //解析主机名失败
+		else 
 		{
 			char err[20];
 			itoa(WSAGetLastError(), err, 20);
@@ -564,31 +609,25 @@ void CyuhengWireSharkDlg::OnBnClickedButton4()//ping
 			infoDisplay.AddString("域名解析失败，错误码:" + info);
 		}
 	}
-	/**** 创建收发ICMP包的原始套接字***/
 	SOCKET pingSocket = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
-	/***设置接收超时时间***/
 	int nTime = 1000;
 	setsockopt(pingSocket, SOL_SOCKET, SO_RCVTIMEO, (char*)&nTime, sizeof(nTime));
-	/***设置ICMP包发送的目的地址***/
 	SOCKADDR_IN dest;
 	dest.sin_family = AF_INET;
 	dest.sin_port = htons(0);
 	dest.sin_addr.S_un.S_addr = ulDestIP;
-	/***创建ICMP包***/
 	char buff[sizeof(IcmpHeader) + DATALEN];
 	IcmpHeader* pIcmp = (IcmpHeader*)buff;
-	/***填写ICMP包数据***/
-	pIcmp->icmp_type = 8;	// ICMP回送请求
-	pIcmp->icmp_code = 0;
-	pIcmp->icmp_id = (unsigned short)GetCurrentProcessId();//获取进程号作为ID 
-	pIcmp->icmp_timestamp = 0; //时间戳暂设置为0，具体值发送时再填
-	pIcmp->icmp_checksum = 0;  //校验和在计算前应先设置为0
-	pIcmp->icmp_sequence = 0;  //初始序列号
-	/***填充数据部分，可以为任意***/
+	pIcmp->bIcmpType = 8;	// ICMP回送请求
+	pIcmp->bIcmpCode = 0;
+	pIcmp->nIcmpId = (unsigned short)GetCurrentProcessId();//获取进程号作为ID 
+	pIcmp->nIcmpTime = 0; //时间戳暂设置为0，具体值发送时再填
+	pIcmp->nIcmpChecksum = 0;  //校验和在计算前应先设置为0
+	pIcmp->nIcmpSequence = 0;  //初始序列号
+	//填充数据部分
 	memset(&buff[sizeof(IcmpHeader)], '\0', DATALEN);
-	/***调用connect()函数为原始套接字指定通信对端地址***/
+	//调用connect()函数为原始套接字指定通信对端地址
 	connect(pingSocket, (SOCKADDR *)&dest, sizeof(dest));
-	/***收发ICMP报文***/
 	int n = 0;
 	bool timeOut;
 	unsigned short	nSeq = 0;//发送的ICMP报文的序号
@@ -603,10 +642,10 @@ void CyuhengWireSharkDlg::OnBnClickedButton4()//ping
 		if (nCount++ == pingNum)
 			break;
 		/***填写发送前才能填写的一些字段并发送ICMP包***/
-		pIcmp->icmp_checksum = 0;
-		pIcmp->icmp_timestamp = GetTickCount();//时间戳
-		pIcmp->icmp_sequence = nSeq++;  //包序号
-		pIcmp->icmp_checksum = Checksum((unsigned short*)buff, sizeof(IcmpHeader) + DATALEN);
+		pIcmp->nIcmpChecksum = 0;
+		pIcmp->nIcmpTime = GetTickCount();//时间戳
+		pIcmp->nIcmpSequence = nSeq++;  //包序号
+		pIcmp->nIcmpChecksum = Checksum((unsigned short*)buff, sizeof(IcmpHeader) + DATALEN);
 		nRet = send(pingSocket, buff, sizeof(IcmpHeader) + DATALEN, 0);
 		if (nRet == SOCKET_ERROR)
 		{
@@ -639,26 +678,27 @@ void CyuhengWireSharkDlg::OnBnClickedButton4()//ping
 				}
 			}
 			pingReceive = (IcmpHeader*)(recvBuf + 20);
-			//收到的数据包含20个字节的IP首部，加20才是ICMP首部位置 
-			if (pingReceive->icmp_id != GetCurrentProcessId())
+			//加20是ICMP首部位置 
+			if (pingReceive->nIcmpId != GetCurrentProcessId())
 				//收到报文是否为本程序发送的请求报文的应答报文
 			{
-				//不是则重新接收	
 				infoDisplay.AddString("收到一个非预期的ICMP报文，忽略！\n");
 			}
-			else  //是则退出循环
-				break;
+			else break;
 		} while (n < 10);//重新接收次数不超过10则继续重试
-		if (n > 10)// 收到太多非预期的ICMP报文则退出
+		if (n > 10)
 		{
-			infoDisplay.AddString("对方机器向本机发送了太多的ICMP报文");
+			infoDisplay.AddString("对方机器向本机发送了太多的ICMP报文\n");
 			closesocket(pingSocket);
 			WSACleanup();
 		}
-		if (timeOut)continue;  //接收超时则发送下一个ICPM报文
-		/****解析接收到的ICMP包****/
+		if (timeOut) 
+		{
+			mainDisplay.AddString("连接超时,ping不通!\n");
+			break;
+		}
 		int nTick = GetTickCount();
-		if (nRet < 20 + sizeof(IcmpHeader))  //收到的报文长度不足则不予解析
+		if (nRet < 20 + sizeof(IcmpHeader))
 		{
 			infoDisplay.AddString("报文长度太短，丢弃！\n");
 			continue;
@@ -667,29 +707,57 @@ void CyuhengWireSharkDlg::OnBnClickedButton4()//ping
 		{
 			//解析收到报文
 			CString message;
-			message.Format("IMCP包序号:%d  大小:%d  来自:%s  响应时间:%d(ms)",(pingReceive->icmp_sequence)+1,nRet,inet_ntoa(from.sin_addr),nTick-pingReceive->icmp_timestamp);
+			message.Format("IMCP包序号:%d  大小:%d  来自:%s  响应时间:%d(ms)",(pingReceive->nIcmpSequence)+1,nRet,inet_ntoa(from.sin_addr),nTick-pingReceive->nIcmpTime);
 			mainDisplay.AddString(message);
-			Sleep(1000);  //延时1秒再发送下一个数据包
+			Sleep(300);
 		}
 	}
 	infoDisplay.AddString("ping结束");
-	mainDisplay.AddString("**************************ping结束**************************");
+	mainDisplay.AddString("**************************ping结束**************************\n");
 }
 
 
-void CyuhengWireSharkDlg::OnEnChangeEdit3()
-{
-}
 
-
-void CyuhengWireSharkDlg::OnBnClickedButton3()//这个函数用于保存抓包的数组
+void CyuhengWireSharkDlg::OnBnClickedButton6()//保存文件
 {
-	
-	fstream file;
-	file.open("c:/test/1.txt");
-	for (int i=0;i<packrows;i++)
+	char szFilter[] = "txt文件(*.txt)|*.txt|All Files(*.*)|*.*||";
+	CFileDialog SaveDlg(false, ".txt", 0, 0, szFilter);
+	int x = SaveDlg.DoModal();
+	if (x==IDOK)
 	{
-		string fileContent(packs[i]);
-		file << fileContent;
+		ofstream saveFile;
+		CString content;
+		saveFile.open(SaveDlg.GetPathName());
+		for (int i = 0; i < mainDisplay.GetCount(); i++) {
+			mainDisplay.GetText(i, content);
+			saveFile << content;
+		}
+		MessageBox("保存成功");
 	}
+	
+}
+
+
+void CyuhengWireSharkDlg::OnBnClickedButton3()//读取文件 练习一下C++ 
+{
+	char szFilter[] = "CAP文件(*.txt)|*.txt|All Files(*.*)|*.*||";
+	CFileDialog OpenDlg(false, ".txt", 0, 0, szFilter);
+	int x = OpenDlg.DoModal();
+	int i;
+	if (x == IDOK)
+	{
+		ifstream readFile;
+		readFile.open(OpenDlg.GetPathName());
+		string row;
+		while (getline(readFile, row))
+		{
+			mainDisplay.AddString(CString(row.c_str()));
+		}
+	}
+}
+
+
+void CyuhengWireSharkDlg::OnLbnSelchangeList2()
+{
+	// TODO: 在此添加控件通知处理程序代码
 }
